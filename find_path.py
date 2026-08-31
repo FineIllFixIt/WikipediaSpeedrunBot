@@ -95,7 +95,6 @@ def run_wiki_bot(path, website="wikipedia.org", wiki_speedruns_lobby_info={}):
         search_url = "https://en." + website + "/wiki/"
         driver.get(start_url)
     elif website == "wikispeedruns.com" and wiki_speedruns_lobby_info == {}:
-        sleep_time = 0.1
         # Set up wikipedia speedruns for correct pages (XPATH is pretty rigid so it might need to be updated often
         # but the inputs and start button don't have an id so not really a better way to select them.)
         start_url = "https://" + website
@@ -117,7 +116,6 @@ def run_wiki_bot(path, website="wikipedia.org", wiki_speedruns_lobby_info={}):
         skip_button = driver.find_element(By.ID, "start-btn")
         skip_button.click()
     elif website == "wikispeedruns.com" and "lobby_number" in wiki_speedruns_lobby_info:
-        sleept_time = 0.1
         start_url = "https://" + website + "/lobby/" + wiki_speedruns_lobby_info['lobby_number']
         search_url = "/wiki/"
         driver.get(start_url)
@@ -173,6 +171,7 @@ def run_wiki_bot(path, website="wikipedia.org", wiki_speedruns_lobby_info={}):
         while page_link == None:
             if website == "wikispeedruns.com" and page_load:
                 time.sleep(1)
+                time_waiting += 1
                 page_load = False
             try:
                 page_link = driver.find_element(By.CSS_SELECTOR, f'a[href="{next_page_url_unencoded}"]')
@@ -254,5 +253,7 @@ while command != "q" and command != "quit":
             print(f"Total time to completion: {total_time / 1000} seconds")
             print(f"Total wait/load time: {wait_time} seconds")
             print(f"Time excluding wait/load time: {(total_time / 1000) - wait_time} seconds")
+            total_time = None
+            wait_time = None
 
     command = input("Type quit to exit the program or anything else to find a path between two wikipedia pages: ")

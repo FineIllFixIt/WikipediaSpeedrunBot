@@ -28,7 +28,7 @@ def bidirectional_bfs(start, end):
         for page in pages[current_out]['outgoing']:
             if page in incoming_visited:
                 return get_path(outgoing_visited, incoming_visited, current_out, page)
-            if page not in outgoing_visited:
+            if page not in outgoing_visited and page.isascii():
                 outgoing_visited[page] = current_out
                 outgoing_queue.append(page)
 
@@ -36,7 +36,7 @@ def bidirectional_bfs(start, end):
         for page in pages[current_in]['incoming']:
             if page in outgoing_visited:
                 return get_path(outgoing_visited, incoming_visited, page, current_in)
-            if page not in incoming_visited:
+            if page not in incoming_visited and page.isascii():
                 incoming_visited[page] = current_in
                 incoming_queue.append(page)
 
@@ -88,17 +88,14 @@ def get_title_option(title):
 
 def run_wiki_bot(path, website="wikipedia.org", wiki_speedruns_lobby_info={}):
     start_url = ""
-    search_url = ""
     sleep_time = 0.1
     if website == "wikipedia.org":
         start_url = "https://en." + website + "/wiki/" + path[0]
-        search_url = "https://en." + website + "/wiki/"
         driver.get(start_url)
     elif website == "wikispeedruns.com" and wiki_speedruns_lobby_info == {}:
         # Set up wikipedia speedruns for correct pages (XPATH is pretty rigid so it might need to be updated often
         # but the inputs and start button don't have an id so not really a better way to select them.)
         start_url = "https://" + website
-        search_url = "/wiki/"
         driver.get(start_url)
         start_input = driver.find_element(By.XPATH, '//*[@id="quick-play"]/div[2]/div/div[1]/div[2]/div/div[1]/div/div/input')
         start_input.clear()
@@ -117,7 +114,6 @@ def run_wiki_bot(path, website="wikipedia.org", wiki_speedruns_lobby_info={}):
         skip_button.click()
     elif website == "wikispeedruns.com" and "lobby_number" in wiki_speedruns_lobby_info:
         start_url = "https://" + website + "/lobby/" + wiki_speedruns_lobby_info['lobby_number']
-        search_url = "/wiki/"
         driver.get(start_url)
         name_input = driver.find_element(By.ID, "name")
         name_input.clear()
@@ -130,7 +126,6 @@ def run_wiki_bot(path, website="wikipedia.org", wiki_speedruns_lobby_info={}):
         time.sleep(1)
         start_link = None
         try:
-            print(f"{start_url}/play/{wiki_speedruns_lobby_info['prompt_number']}")
             start_link = driver.find_element(By.CSS_SELECTOR, f'a[href="/lobby/{wiki_speedruns_lobby_info['lobby_number']}/play/{wiki_speedruns_lobby_info['prompt_number']}"]')
         except:
             print("Prompts table wasn't found. Code is outdated or login information was incorrect.")
@@ -142,10 +137,15 @@ def run_wiki_bot(path, website="wikipedia.org", wiki_speedruns_lobby_info={}):
         skip_button.click()
     elif website == "wikispeedrun.org":
         start_url = "https://" + website + "/settings"
-        search_url = "/wiki/"
         driver.get(start_url)
         time.sleep(1)
-        start_input = driver.find_element(By.ID, 'startArticle')
+        waiting = True
+        while waiting:
+            try:
+                start_input = driver.find_element(By.ID, 'startArticle')
+                waiting = False
+            except:
+                time.sleep(0.25)
         start_input.clear()
         start_input.send_keys(path[0].replace("-", " ").replace("_", " ").title())
         time.sleep(2)
@@ -160,24 +160,31 @@ def run_wiki_bot(path, website="wikipedia.org", wiki_speedruns_lobby_info={}):
     else:
         return None, "Invalid Website or Login Info"
 
+
     start_time_millis = int(time.time() * 1000)
     time_waiting = 0
     prev_page = path[0]
     page_load = True
+    use_driver = driver
     for page in path[1:]:
-        next_page_url_encoded = f"{search_url}{quote(page)}"
-        next_page_url_unencoded = f"{search_url}{page}"
+        next_page_url_encoded = f"/wiki/{quote(page)}"
+        next_page_url_unencoded = f"/wiki/{page}"
+        print(next_page_url_encoded)
         page_link = None
         while page_link == None:
             if website == "wikispeedruns.com" and page_load:
                 time.sleep(1)
                 time_waiting += 1
-                page_load = False
             try:
-                page_link = driver.find_element(By.CSS_SELECTOR, f'a[href="{next_page_url_unencoded}"]')
+                try:
+                    shadow_host = driver.find_element(By.CSS_SELECTOR, ".wiki-article-host")
+                    use_driver = shadow_host.shadow_root
+                except:
+                    pass
+                page_link = use_driver.find_element(By.CSS_SELECTOR, f"a[href*='{next_page_url_unencoded}']")
             except:
                 try:
-                    page_link = driver.find_element(By.CSS_SELECTOR, f'a[href="{next_page_url_encoded}"]')
+                    page_link = use_driver.find_element(By.CSS_SELECTOR, f"a[href*='{next_page_url_encoded}']")
                 except:
                     if prev_page.replace("-", " ").replace("_", " ").lower == page.replace("-", " ").replace("_", " ").lower():
                         print("Skipping page, duplicate redirect found")
@@ -185,7 +192,6 @@ def run_wiki_bot(path, website="wikipedia.org", wiki_speedruns_lobby_info={}):
                     page_link = None
                     time.sleep(sleep_time)
                     time_waiting += sleep_time
-
         if page_link != None: 
             prev_page = page
             driver.execute_script("arguments[0].click();", page_link)
@@ -227,6 +233,7 @@ while command != "q" and command != "quit":
                 print("That url didn't work. The wikipages file might be out of date or the url was input wrong. Please try a different page.")
 
     if starting_title != "" and ending_title != "":
+        total_time = None
         path = bidirectional_bfs(starting_title, ending_title)
         print(path)
         run_bot = input("Do you want to run the automatic bot for this path? (Y/N): ")
